@@ -11,9 +11,7 @@ scalaVersion := "2.9.1"
 // Dependencies
 
 libraryDependencies ++= Seq(
-    "org.ow2.asm" % "asm" % "4.0",
-    "org.ow2.asm" % "asm-tree" % "4.0",
-    "org.ow2.asm" % "asm-analysis" % "4.0"
+    "org.ow2.asm" % "asm" % "4.0"
 )
 
 // Test dependencies

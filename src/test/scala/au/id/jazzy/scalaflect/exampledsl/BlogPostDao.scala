@@ -24,7 +24,6 @@ class BlogPostDao extends ObjectListDao(classOf[BlogPost]) {
       $(_.comments.$.author) %= author
     )
   }
-
 }
 
 case class BlogPost(author: String, title: String, published: Boolean, tags: Set[String], comments: List[Comment])
