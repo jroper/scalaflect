@@ -42,7 +42,8 @@ class ScalaFlect[T](val clazz: Class[T]) {
     // will be calculated multiple times
     Option(cache.get(f.getClass).asInstanceOf[Member[R]]) getOrElse {
       val visitor = new FunctionVisitor;
-      new ClassReader(f.getClass.getClassLoader.getResourceAsStream(f.getClass.getName.replace('.', '/') + ".class")).accept(visitor, 0)
+      val classAsStream = f.getClass.getClassLoader.getResourceAsStream(f.getClass.getName.replace('.', '/') + ".class");
+      new ClassReader(classAsStream).accept(visitor, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
       val member = visitor.methodVisitor.member.get.asInstanceOf[Member[R]]
       cache.putIfAbsent(f.getClass, member)
       member
@@ -95,15 +96,17 @@ class ScalaFlect[T](val clazz: Class[T]) {
           // Traversing a collection
           currentClass = null;
           member = Some(new PartialTraversedTraversableMember(member))
+        } else {
+          throw new IllegalArgumentException("The only allowed method to invoke on TraversableTraverser is $")
         }
       } else {
         // Find the method
-        currentClass.getDeclaredMethods find {
-          _.getName == name
-        } map {
-          method =>
-            currentClass = method.getReturnType
-            member = Some(new MethodMember(method, getParentMember(method.getDeclaringClass)))
+        try {
+          val method = currentClass.getDeclaredMethod(name)
+          currentClass = method.getReturnType
+          member = Some(new MethodMember(method, getParentMember(method.getDeclaringClass)))
+        } catch {
+          case e: NoSuchMethodException => throw new IllegalArgumentException("Unexpected method invocation: " + name + desc, e)
         }
       }
       this
@@ -119,9 +122,13 @@ class ScalaFlect[T](val clazz: Class[T]) {
       if (opcode == Opcodes.GETSTATIC) {
         // Ignore, it's probably just looking up a static for conversion to TraversableTraverser
       } else {
-        val field = currentClass.getDeclaredField(name);
-        currentClass = field.getType
-        member = Some(new FieldMember(field, getParentMember(field.getDeclaringClass)))
+        try {
+          val field = currentClass.getDeclaredField(name);
+          currentClass = field.getType
+          member = Some(new FieldMember(field, getParentMember(field.getDeclaringClass)))
+        } catch {
+          case e: NoSuchMethodException => throw new IllegalArgumentException("Unexpected field access: " + name + desc, e)
+        }
       }
       this
     }
@@ -135,9 +142,13 @@ class ScalaFlect[T](val clazz: Class[T]) {
 
 }
 
+/**
+ * Provides implicit methods for conversions
+ */
 object ScalaFlect {
   /**
    * Convert the given traversable to a traverser so that its type can be referenced
+   *
    * @param traversable The traversable to convert
    * @return A TraversableTraverser
    */
@@ -179,6 +190,7 @@ trait Member[R] {
   def get(obj: Any): Traversable[R] = parent() map { _.get(obj) } getOrElse { List(obj) } flatMap { invoke(_) }
 
   protected def invoke(obj: Any): Traversable[R]
+
   override def toString = (parent map { _.toString + "." } getOrElse { "" }) + name
 }
 
